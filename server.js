@@ -83,10 +83,26 @@ const server = http.createServer((req, res) => {
     }
 
     // Phase 4: GET /rooms/:roomId/:direction
+    if (req.method === 'GET' && req.url.startsWith('/rooms/')) {
+      const urlParts = req.url.split('/');
+      const roomId = urlParts[2];
+      const direction = urlParts[3];
+      const possibleDirections = 'nwes';
+      if (urlParts.length === 4 && possibleDirections.includes(direction)) {
+        player.move(direction);
+
+      }
+    }
 
     // Phase 5: POST /items/:itemId/:action
 
     // Phase 6: Redirect if no matching route handlers
+    // else {
+    //   const roomId = world.rooms.indexOf(player.currentRoom);
+    //   res.statusCode = 302;
+    //   res.setHeader('Location', `/rooms/${roomId}`);
+    //   return res.end();
+    // }
   })
 });
 
