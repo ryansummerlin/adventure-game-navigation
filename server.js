@@ -10,6 +10,16 @@ let player;
 let world = new World();
 world.loadWorld(worldData);
 
+const returnError = function() {
+  const errorTemplate = fs.readFileSync('./views/error.html', 'utf-8');
+  const roomId = player.currentRoom.id;
+  const errorPage = errorTemplate
+    .replace(/#{roomId}/g, roomId)
+    .replace(/#{errorMessage}/g, 'Something went wrong');
+
+  return errorPage;
+}
+
 const server = http.createServer((req, res) => {
 
   /* ============== ASSEMBLE THE REQUEST BODY AS A STRING =============== */
@@ -61,20 +71,17 @@ const server = http.createServer((req, res) => {
       if (urlParts.length === 3 && world.rooms[roomId]) {
         const room = player.currentRoom;
         const roomName = room.name;
-        const roomItems = room.items.map(item => item.name);
-        const inventory = player.items.map(item => item.name);
-        const exits = room.exits;
-        let exitsArr = [];
-        for (let key in exits) {
-          exitsArr.push(key + ": " + exits[key].name);
-        }
+        const roomItems = room.itemsToString();
+        const inventory = player.inventoryToString();
+        const exits = room.exitsToString();
+
 
         const roomTemplate = fs.readFileSync('./views/room.html', 'utf-8');
         const roomPage = roomTemplate
           .replace(/#{roomName}/g, roomName)
-          .replace(/#{roomItems}/g, roomItems.join(', '))
-          .replace(/#{inventory}/g, inventory.join(', '))
-          .replace(/#{exits}/g, exitsArr.join(', '));
+          .replace(/#{roomItems}/g, roomItems)
+          .replace(/#{inventory}/g, inventory)
+          .replace(/#{exits}/g, exits);
 
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/html');
@@ -86,23 +93,58 @@ const server = http.createServer((req, res) => {
     if (req.method === 'GET' && req.url.startsWith('/rooms/')) {
       const urlParts = req.url.split('/');
       const roomId = urlParts[2];
-      const direction = urlParts[3];
+      const direction = urlParts[3][0];
       const possibleDirections = 'nwes';
       if (urlParts.length === 4 && possibleDirections.includes(direction)) {
-        player.move(direction);
-
+        try {
+          player.move(direction);
+        } catch {
+          console.log("You can't do that!");
+        }
       }
+
+      res.statusCode = 302;
+      res.setHeader('Location', `/rooms/${roomId}`);
+      return res.end();
     }
 
     // Phase 5: POST /items/:itemId/:action
+    if (req.method === 'POST' && req.url.startsWith('/items/')) {
+      const urlParts = req.url.split('/');
+      const itemId = urlParts[2];
+      const action = urlParts[3];
+      const roomId = player.currentRoom.id;
+
+      switch(action) {
+        case 'take':
+          player.takeItem(itemId);
+          break;
+        case 'eat':
+          try {
+            player.eatItem(itemId);
+          } catch {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'text/html');
+            return res.end(returnError());
+          }
+          break;
+        case 'drop':
+          player.dropItem(itemId);
+          break;
+      }
+
+      res.statusCode = 302;
+      res.setHeader('Location', `/rooms/${roomId}`);
+      return res.end();
+    }
 
     // Phase 6: Redirect if no matching route handlers
-    // else {
-    //   const roomId = world.rooms.indexOf(player.currentRoom);
-    //   res.statusCode = 302;
-    //   res.setHeader('Location', `/rooms/${roomId}`);
-    //   return res.end();
-    // }
+
+    // const roomId = player.currentRoom.id;
+    // res.statusCode = 302;
+    // res.setHeader('Location', `/rooms/${roomId}`);
+    // return res.end();
+
   })
 });
 
